@@ -634,6 +634,10 @@ let tryEntityIdent (com: Compiler) entFullName =
     | "Fable.Core.Dart.Future`1" -> makeIdentExpr "Future" |> Some
     | "Fable.Core.Dart.Stream`1" -> makeIdentExpr "Stream" |> Some
     | "Microsoft.FSharp.Control.FSharpAsync`1" -> makeImportLib com MetaType "Async" "AsyncBuilder" |> Some
+    | "System.Threading.CancellationToken"
+    | "System.Threading.CancellationTokenSource" ->
+        makeImportLib com MetaType "CancellationToken" "AsyncBuilder" |> Some
+    | "System.Threading.CancellationTokenRegistration" -> makeImportLib com MetaType "IDisposable" "Types" |> Some
     | BuiltinDefinition BclDateOnly
     | BuiltinDefinition BclDateTime
     | BuiltinDefinition BclDateTimeOffset -> makeIdentExpr "DateTime" |> Some
@@ -4045,6 +4049,7 @@ let private replacedModules =
             "System.Random", random
             "System.Threading.CancellationToken", cancels
             "System.Threading.CancellationTokenSource", cancels
+            "System.Threading.CancellationTokenRegistration", disposables
             "System.Threading.Monitor", monitor
             "System.Activator", activator
             "System.Text.Encoding", encoding
