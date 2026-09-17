@@ -415,10 +415,26 @@ type Class(name, ?genParams, ?constructor, ?extends, ?implements, ?variables, ?m
     member _.InstanceMethods: InstanceMethod list = defaultArg methods []
     member _.Annotations: Annotation list = defaultArg annotations []
 
+type TypeAliasDecl =
+    {
+        Name: string
+        GenericParams: GenericParam list
+        AliasedType: Type
+    }
+
 type Declaration =
     | ClassDeclaration of Class
+    | TypeAliasDeclaration of TypeAliasDecl
     | VariableDeclaration of ident: Ident * kind: VariableDeclarationKind * value: Expression
     | FunctionDeclaration of FunctionDecl
+
+    static member typeAliasDeclaration(name, aliasedType, ?genParams) =
+        TypeAliasDeclaration
+            {
+                Name = name
+                GenericParams = defaultArg genParams []
+                AliasedType = aliasedType
+            }
 
     static member variableDeclaration(ident, kind, value) = VariableDeclaration(ident, kind, value)
 

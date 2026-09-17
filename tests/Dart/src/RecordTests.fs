@@ -42,6 +42,12 @@ type Time =
 type CarInterior = { Seats: int }
 type Car = { Interior: CarInterior }
 
+type RecordWithSameNameField =
+    { Id: Id }
+
+type MutableRecordWithSameNameField =
+    { mutable Id: Id }
+
 let tests() =
     testCase "Anonymous records work" <| fun () ->
         let r = makeAnonRec()
@@ -155,3 +161,19 @@ let tests() =
         let car2 =
             {| car with Interior.Seats = 5 |}
         equal 5 car2.Interior.Seats
+
+    testCase "Record field can have the same name as its type" <| fun () ->
+        let record: RecordWithSameNameField = { Id = Id "foo" }
+
+        match record.Id with
+        | Id value -> value |> equal "foo"
+
+
+    testCase "Mutable record field can have the same name as its type" <| fun () ->
+        let record =
+            { Id = Id "foo" }
+
+        record.Id <- Id "bar"
+
+        match record.Id with
+        | Id value -> value |> equal "bar"

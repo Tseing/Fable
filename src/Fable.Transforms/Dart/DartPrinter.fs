@@ -1089,6 +1089,15 @@ let run (writer: Writer) (file: File) : Async<unit> =
         match decl with
         | ClassDeclaration decl -> printer.PrintClassDeclaration(decl)
 
+        | TypeAliasDeclaration d ->
+            printer.Print("typedef ")
+            printer.Print(d.Name)
+            printer.PrintGenericParams(d.GenericParams)
+            printer.Print(" = ")
+            printer.PrintType(d.AliasedType)
+            printer.Print(";")
+            printer.PrintNewLine()
+
         | FunctionDeclaration d ->
             printer.PrintFunctionDeclaration(
                 d.ReturnType,

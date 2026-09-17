@@ -292,6 +292,26 @@ module Util =
             | _ -> "_")
             name
 
+    let tryAliasFieldType (ctx: Context) ownerName (genParams: GenericParam list) fieldName typ =
+        match typ with
+        | TypeReference(ident, _, info) when ident.ImportModule.IsNone && ident.Name = fieldName ->
+
+            let aliasName = "$" + ownerName + "$" + fieldName |> getUniqueNameInRootScope ctx
+
+            let aliasDecl =
+                Declaration.typeAliasDeclaration (aliasName, typ, genParams = genParams)
+
+            let aliasIdent = makeImmutableIdent MetaType aliasName
+
+            let aliasGenArgs = genParams |> List.map (fun p -> Generic p.Name)
+
+            let aliasType =
+                Type.reference (aliasIdent, aliasGenArgs, isRecord = info.IsRecord, isUnion = info.IsUnion)
+
+            Some aliasDecl, aliasType
+
+        | _ -> None, typ
+
     let getUniqueNameInRootScope (ctx: Context) name =
         let name =
             (name, Naming.NoMemberPart)
@@ -2620,6 +2640,31 @@ module Util =
         )
         |> List.unzip
 
+    let transformFieldsWithTypeAlias (com: IDartCompiler) ctx ownerName genParams (fields: Fable.Field list) =
+        let transformed =
+            fields
+            |> List.map (fun f ->
+                let kind =
+                    if f.IsMutable then
+                        Var
+                    else
+                        Final
+
+                let fieldName = sanitizeMember f.Name
+
+                let typ = FableTransforms.uncurryType f.FieldType |> transformType com ctx
+
+                let aliasDecl, typ = tryAliasFieldType ctx ownerName genParams fieldName typ
+
+                let ident = makeIdent f.IsMutable typ fieldName
+
+                aliasDecl, ident, InstanceVariable(ident, kind = kind)
+            )
+
+        let aliases, fieldIdents, varDecls = List.unzip3 transformed
+
+        List.choose id aliases, fieldIdents, varDecls
+
     let transformUnionDeclaration
         (com: IDartCompiler)
         ctx
@@ -2642,11 +2687,11 @@ module Util =
             let mutable tag = -1
 
             ent.UnionCases
-            |> List.choose (fun uci ->
+            |> List.collect (fun uci ->
                 tag <- tag + 1
 
                 if List.isEmpty uci.UnionCaseFields then
-                    None
+                    []
                 else
                     let caseDeclName = getUnionCaseDeclarationName unionDecl.Name uci
 
@@ -2655,7 +2700,8 @@ module Util =
                         |> List.map (fun g -> Generic g.Name)
                         |> makeTypeRefFromName caseDeclName
 
-                    let fields, varDecls = transformFields com ctx uci.UnionCaseFields
+                    let aliases, fields, varDecls =
+                        transformFieldsWithTypeAlias com ctx caseDeclName genParams uci.UnionCaseFields
 
                     let wrapCompare otherExpr body =
                         [
@@ -2683,15 +2729,17 @@ module Util =
                     let constructor =
                         Constructor(args = consArgs, superArgs = unnamedArgs [ tag ], isConst = true)
 
-                    Declaration.classDeclaration (
-                        caseDeclName,
-                        genParams = genParams,
-                        constructor = constructor,
-                        extends = unionTypeRef,
-                        variables = varDecls,
-                        methods = methods
-                    )
-                    |> Some
+                    aliases
+                    @ [
+                        Declaration.classDeclaration (
+                            caseDeclName,
+                            genParams = genParams,
+                            constructor = constructor,
+                            extends = unionTypeRef,
+                            variables = varDecls,
+                            methods = methods
+                        )
+                    ]
             )
 
         let hasCasesWithoutFields =
@@ -2746,7 +2794,8 @@ module Util =
 
         let hasMutableFields = ent.FSharpFields |> List.exists (fun f -> f.IsMutable)
 
-        let fields, varDecls = transformFields com ctx ent.FSharpFields
+        let aliases, fields, varDecls =
+            transformFieldsWithTypeAlias com ctx decl.Name genParams ent.FSharpFields
 
         let consArgs = fields |> List.map (fun f -> FunctionArg(f, isConsThisArg = true))
 
@@ -2763,7 +2812,8 @@ module Util =
                 yield! classMethods
             ]
 
-        [
+        aliases
+        @ [
             Declaration.classDeclaration (
                 decl.Name,
                 genParams = genParams,
